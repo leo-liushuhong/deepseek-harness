@@ -197,6 +197,75 @@ describe('BlockAssembler replay metadata', () => {
   })
 })
 
+describe('BlockAssembler invoke recovery', () => {
+  it('recovers a tool call leaked into a text block as <invoke> markup', () => {
+    const assembler = new BlockAssembler()
+    assembler.push({
+      type: 'block-end',
+      index: 0,
+      block: {
+        type: 'text',
+        text: 'lead <invoke name="edit"><parameter name="file_path">/tmp/a.txt</parameter><parameter name="new_string">hi</parameter></invoke> trail',
+      },
+    })
+    assembler.push({
+      type: 'finish',
+      reason: { kind: 'tool-calls' },
+      replayState: { response: { responseId: 'resp-1' }, blocks: [{ type: 'text' }] },
+    })
+
+    expect(assembler.blocks()).toEqual([
+      { type: 'text', text: 'lead ' },
+      { type: 'tool-call', id: ToolCallId('call-invoke-0-1'), name: 'edit', arguments: '{"file_path":"/tmp/a.txt","new_string":"hi"}' },
+      { type: 'text', text: ' trail' },
+    ])
+    // Recovery splits the block, so the adapter's per-block replay metadata no
+    // longer aligns and the envelope is dropped.
+    expect(assembler.replayState).toBeUndefined()
+  })
+
+  it('recovers multiple invokes and preserves the text between them', () => {
+    const assembler = new BlockAssembler()
+    assembler.push({
+      type: 'block-end',
+      index: 0,
+      block: {
+        type: 'text',
+        text: '<invoke name="read"><parameter name="file_path">/a</parameter></invoke> between <invoke name="write"><parameter name="file_path">/b</parameter></invoke>',
+      },
+    })
+
+    expect(assembler.blocks()).toEqual([
+      { type: 'tool-call', id: ToolCallId('call-invoke-0-1'), name: 'read', arguments: '{"file_path":"/a"}' },
+      { type: 'text', text: ' between ' },
+      { type: 'tool-call', id: ToolCallId('call-invoke-0-2'), name: 'write', arguments: '{"file_path":"/b"}' },
+    ])
+  })
+
+  it('leaves text without a complete <invoke> untouched', () => {
+    const assembler = new BlockAssembler()
+    assembler.push({ type: 'block-end', index: 0, block: { type: 'text', text: 'plain text <invoke (truncated' } })
+    expect(assembler.blocks()).toEqual([{ type: 'text', text: 'plain text <invoke (truncated' }])
+  })
+
+  it('drops whitespace-only text between adjacent invokes', () => {
+    const assembler = new BlockAssembler()
+    assembler.push({
+      type: 'block-end',
+      index: 0,
+      block: {
+        type: 'text',
+        text: '<invoke name="read"><parameter name="file_path">/a</parameter></invoke>\n\n<invoke name="write"><parameter name="file_path">/b</parameter></invoke>',
+      },
+    })
+
+    expect(assembler.blocks()).toEqual([
+      { type: 'tool-call', id: ToolCallId('call-invoke-0-1'), name: 'read', arguments: '{"file_path":"/a"}' },
+      { type: 'tool-call', id: ToolCallId('call-invoke-0-2'), name: 'write', arguments: '{"file_path":"/b"}' },
+    ])
+  })
+})
+
 describe('assertNever', () => {
   it('throws with diagnostics when a value escapes a closed union at runtime', async () => {
     const { assertNever } = await import('@deepseek-ai/dsh-util-values')
