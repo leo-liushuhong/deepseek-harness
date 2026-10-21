@@ -23,6 +23,82 @@ interface PartialBlock {
   block?: ContentBlock
 }
 
+/** Intermediate split of one text block during `<invoke>` recovery. */
+type InvokePart =
+  | { kind: 'text'; text: string }
+  | { kind: 'tool-call'; name: string; parameters: Record<string, string> }
+
+/**
+ * Recover tool calls a provider leaked into a `text` block as DeepSeek-native
+ * `<invoke name="…">…</invoke>` markup instead of a structured tool-call block.
+ * Some gateways serving DeepSeek models over the Anthropic Messages wire emit
+ * this markup as plain text; the adapter maps it to a text block and the loop
+ * never dispatches the call, retrying until the token limit. Splitting the
+ * block into its surrounding text and recovered tool-call blocks lets the call
+ * execute. Each recovered `arguments` is re-stringified from the `<parameter>`
+ * values, and text before, between, and after the markup is preserved in order.
+ * @param blocks - the assembled content blocks, in stream order.
+ * @returns the blocks with leaked invokes recovered as tool calls, and whether
+ *   any block was split.
+ */
+function recoverInvokeToolCalls(blocks: ContentBlock[]): { blocks: ContentBlock[]; changed: boolean } {
+  const invokePattern = /<invoke name="([^"]+)">([\s\S]*?)<\/invoke>/g
+  const parameterPattern = /<parameter name="([^"]+)">([\s\S]*?)<\/parameter>/g
+  let changed = false
+  let invokeSequence = 0
+  const recovered: ContentBlock[] = []
+  for (const [index, block] of blocks.entries()) {
+    if (block.type !== 'text') {
+      recovered.push(block)
+      continue
+    }
+    if (!block.text.includes('<invoke')) {
+      recovered.push(block)
+      continue
+    }
+    const parts: InvokePart[] = []
+    let cursor = 0
+    let matched = false
+    for (const match of block.text.matchAll(invokePattern)) {
+      const name = match[1]
+      const body = match[2]
+      if (name === undefined || body === undefined) continue
+      matched = true
+      if (match.index > cursor) parts.push({ kind: 'text', text: block.text.slice(cursor, match.index) })
+      const parameters: Record<string, string> = {}
+      for (const parameter of body.matchAll(parameterPattern)) {
+        const parameterName = parameter[1]
+        const parameterValue = parameter[2]
+        if (parameterName === undefined || parameterValue === undefined) continue
+        parameters[parameterName] = parameterValue
+      }
+      parts.push({ kind: 'tool-call', name, parameters })
+      cursor = match.index + match[0].length
+    }
+    if (!matched) {
+      recovered.push(block)
+      continue
+    }
+    if (cursor < block.text.length) parts.push({ kind: 'text', text: block.text.slice(cursor) })
+    changed = true
+    for (const part of parts) {
+      if (part.kind === 'text') {
+        if (part.text.trim() === '') continue
+        recovered.push({ type: 'text', text: part.text })
+      } else {
+        invokeSequence += 1
+        recovered.push({
+          type: 'tool-call',
+          id: brandString<ToolCallId>(`call-invoke-${index}-${invokeSequence}`),
+          name: part.name,
+          arguments: JSON.stringify(part.parameters),
+        })
+      }
+    }
+  }
+  return { blocks: changed ? recovered : blocks, changed }
+}
+
 /**
  * Incrementally assembles raw {@link StreamChunk}s into complete
  * {@link ContentBlock}s and a final assistant {@link Message}.
@@ -134,13 +210,17 @@ export class BlockAssembler {
    */
   private assembled(): { blocks: ContentBlock[]; replay: ReplayEnvelope | undefined } {
     const all = this.order.map(index => this.assemble(this.mustGet(index), index))
+    const { blocks: base, changed } = recoverInvokeToolCalls(all)
     const kept = this.finish.kind === 'max-tokens'
-      ? all.map(block => block.type !== 'tool-call')
+      ? base.map(block => block.type !== 'tool-call')
       : undefined
-    const blocks = kept === undefined ? all : all.filter((_, position) => kept[position])
+    const blocks = kept === undefined ? base : base.filter((_, position) => kept[position])
     const envelope = this._replayState
     if (envelope?.blocks === undefined) return { blocks, replay: envelope }
-    if (envelope.blocks.length !== all.length) return { blocks, replay: undefined }
+    // Recovery splits a text block, so the adapter's per-block replay metadata
+    // no longer aligns with the emitted blocks; drop it rather than fabricate
+    // adapter-private metadata this provider-neutral assembler cannot know.
+    if (changed || envelope.blocks.length !== all.length) return { blocks, replay: undefined }
     return {
       blocks,
       replay: kept === undefined || blocks.length === all.length
