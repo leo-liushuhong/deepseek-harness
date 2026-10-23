@@ -266,6 +266,97 @@ describe('BlockAssembler invoke recovery', () => {
   })
 })
 
+describe('BlockAssembler DSML closing-tag stripping', () => {
+  // Leaked closing tags are assembled from parts so this source never contains
+  // a literal DSML delimiter sequence that a gateway could misparse into an
+  // empty tool call.
+  const fw = String.fromCharCode(0xFF5C)
+  const closeTag = (name: string, pipe = fw) => ['</', pipe, 'DSML', pipe, name, '>'].join('')
+  const bareClose = (name: string) => ['</', name, '>'].join('')
+
+  it('strips fullwidth-pipe closing tags and preserves the answer text', () => {
+    const assembler = new BlockAssembler()
+    assembler.push({
+      type: 'block-end',
+      index: 0,
+      block: { type: 'text', text: `answer${closeTag('parameter')} ${closeTag('tool_calls')}` },
+    })
+    expect(assembler.blocks()).toEqual([{ type: 'text', text: 'answer ' }])
+  })
+
+  it('strips a pipe-less closing tag', () => {
+    const assembler = new BlockAssembler()
+    assembler.push({
+      type: 'block-end',
+      index: 0,
+      block: { type: 'text', text: `done${bareClose('invoke')}` },
+    })
+    expect(assembler.blocks()).toEqual([{ type: 'text', text: 'done' }])
+  })
+
+  it('strips the ASCII-pipe closing-tag form', () => {
+    const assembler = new BlockAssembler()
+    assembler.push({
+      type: 'block-end',
+      index: 0,
+      block: { type: 'text', text: `answer${closeTag('parameter', '|')}` },
+    })
+    expect(assembler.blocks()).toEqual([{ type: 'text', text: 'answer' }])
+  })
+
+  it('drops a text block that held only closing tags', () => {
+    const assembler = new BlockAssembler()
+    assembler.push({
+      type: 'block-end',
+      index: 0,
+      block: { type: 'text', text: `${closeTag('parameter')} ${bareClose('invoke')} ${closeTag('tool_calls')}` },
+    })
+    assembler.push({ type: 'block-end', index: 1, block: { type: 'text', text: 'kept' } })
+    expect(assembler.blocks()).toEqual([{ type: 'text', text: 'kept' }])
+  })
+
+  it('leaves text without closing tags untouched and preserves replay metadata', () => {
+    const replayState = { response: { responseId: 'resp-1' }, blocks: [{ type: 'text' }] }
+    const assembler = new BlockAssembler()
+    assembler.push({ type: 'block-end', index: 0, block: { type: 'text', text: 'plain answer' } })
+    assembler.push({ type: 'finish', reason: { kind: 'stop' }, replayState })
+    expect(assembler.blocks()).toEqual([{ type: 'text', text: 'plain answer' }])
+    expect(assembler.replayState).toBe(replayState)
+  })
+
+  it('drops replay metadata when a closing tag is stripped', () => {
+    const assembler = new BlockAssembler()
+    assembler.push({
+      type: 'block-end',
+      index: 0,
+      block: { type: 'text', text: `answer${closeTag('parameter')}` },
+    })
+    assembler.push({
+      type: 'finish',
+      reason: { kind: 'stop' },
+      replayState: { response: { responseId: 'resp-1' }, blocks: [{ type: 'text' }] },
+    })
+    expect(assembler.blocks()).toEqual([{ type: 'text', text: 'answer' }])
+    expect(assembler.replayState).toBeUndefined()
+  })
+
+  it('recovers an invoke and strips a trailing closing tag from the same block', () => {
+    const assembler = new BlockAssembler()
+    assembler.push({
+      type: 'block-end',
+      index: 0,
+      block: {
+        type: 'text',
+        text: `<invoke name="read"><parameter name="file_path">/a</parameter></invoke> done${closeTag('tool_calls')}`,
+      },
+    })
+    expect(assembler.blocks()).toEqual([
+      { type: 'tool-call', id: ToolCallId('call-invoke-0-1'), name: 'read', arguments: '{"file_path":"/a"}' },
+      { type: 'text', text: ' done' },
+    ])
+  })
+})
+
 describe('assertNever', () => {
   it('throws with diagnostics when a value escapes a closed union at runtime', async () => {
     const { assertNever } = await import('@deepseek-ai/dsh-util-values')
