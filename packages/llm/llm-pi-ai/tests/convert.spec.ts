@@ -1020,4 +1020,17 @@ describe('toStreamChunks defensive branches', () => {
     )))
     expect(chunks[0]).toEqual({ type: 'tool-call-delta', index: 0, id: '', argumentsDelta: '{}' })
   })
+
+  it.each([
+    { id: '', name: 'f' },
+    { id: 'call-1', name: '' },
+  ])('rejects a tool call with an empty tool identity %#', async ({ id, name }) => {
+    const partial = assistant({
+      content: [{ type: 'toolCall', id, name, arguments: {} }],
+    })
+    await expect(collect(toStreamChunks(feed(
+      { type: 'toolcall_start', contentIndex: 0, partial },
+      { type: 'toolcall_end', contentIndex: 0, toolCall: { type: 'toolCall', id, name, arguments: {} }, partial },
+    )))).rejects.toMatchObject({ code: 'MALFORMED_RESPONSE' })
+  })
 })

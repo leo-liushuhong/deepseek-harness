@@ -137,7 +137,8 @@ export function mapStopReason(message: AssistantMessage, contextWindow?: number)
  *   in-band terminal error an aborted finish.
  * @param requestedModel - request model identity recorded for durable replay.
  * @returns the harness chunks, ending with `usage` then `finish`; throws
- *   `LlmError` (`STREAM_CLOSED`) if the source ends without a terminal event.
+ *   `LlmError` (`STREAM_CLOSED`) if the source ends without a terminal event,
+ *   and (`MALFORMED_RESPONSE`) when a tool call carries an empty id or name.
  */
 export async function* toStreamChunks(
   events: AsyncIterable<AssistantMessageEvent>,
@@ -191,7 +192,14 @@ export async function* toStreamChunks(
         }
         break
       }
-      case 'toolcall_end':
+      case 'toolcall_end': {
+        // A provider may hand back an empty tool identity; reject it as a
+        // malformed response like the DeepSeek Messages adapter, instead of
+        // letting an empty ToolCallId reach the V4 session format (which
+        // rejects it at write time).
+        if (event.toolCall.id.length === 0 || event.toolCall.name.length === 0) {
+          throw new LlmError('pi-ai tool call has empty tool identity', 'MALFORMED_RESPONSE')
+        }
         yield {
           type: 'block-end',
           index: event.contentIndex,
@@ -205,6 +213,7 @@ export async function* toStreamChunks(
           },
         }
         break
+      }
       case 'done':
         yield { type: 'usage', usage: mapUsage(event.message.usage) }
         yield {
