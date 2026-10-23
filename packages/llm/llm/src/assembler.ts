@@ -100,6 +100,38 @@ function recoverInvokeToolCalls(blocks: ContentBlock[]): { blocks: ContentBlock[
 }
 
 /**
+ * Strip DeepSeek-native DSML closing tags that a gateway leaked into a `text`
+ * block as literal markup. A closing tag carries no tool name or arguments, so
+ * it is pure noise and cannot be recovered into a tool call; removing it keeps
+ * the visible answer clean. Covers the fullwidth-pipe form (U+FF5C), the
+ * ASCII-pipe form, and the pipe-less form, for the `parameter`, `invoke`, and
+ * `tool_calls` tag names.
+ * @param blocks - the assembled content blocks, in stream order.
+ * @returns the blocks with leaked closing tags removed (a text block that held
+ *   only tags is dropped), and whether any block changed.
+ */
+function stripDsmlClosingTags(blocks: ContentBlock[]): { blocks: ContentBlock[]; changed: boolean } {
+  const closingTagPattern = /<\/[\uFF5C|]DSML[\uFF5C|](?:parameter|invoke|tool_calls)>|<\/(?:parameter|invoke|tool_calls)>/g
+  let changed = false
+  const stripped: ContentBlock[] = []
+  for (const block of blocks) {
+    if (block.type !== 'text') {
+      stripped.push(block)
+      continue
+    }
+    const text = block.text.replace(closingTagPattern, '')
+    if (text === block.text) {
+      stripped.push(block)
+      continue
+    }
+    changed = true
+    if (text.trim() === '') continue
+    stripped.push({ type: 'text', text })
+  }
+  return { blocks: changed ? stripped : blocks, changed }
+}
+
+/**
  * Incrementally assembles raw {@link StreamChunk}s into complete
  * {@link ContentBlock}s and a final assistant {@link Message}.
  *
@@ -210,16 +242,20 @@ export class BlockAssembler {
    */
   private assembled(): { blocks: ContentBlock[]; replay: ReplayEnvelope | undefined } {
     const all = this.order.map(index => this.assemble(this.mustGet(index), index))
-    const { blocks: base, changed } = recoverInvokeToolCalls(all)
+    const recovered = recoverInvokeToolCalls(all)
+    const stripped = stripDsmlClosingTags(recovered.blocks)
+    const base = stripped.blocks
+    const changed = recovered.changed || stripped.changed
     const kept = this.finish.kind === 'max-tokens'
       ? base.map(block => block.type !== 'tool-call')
       : undefined
     const blocks = kept === undefined ? base : base.filter((_, position) => kept[position])
     const envelope = this._replayState
     if (envelope?.blocks === undefined) return { blocks, replay: envelope }
-    // Recovery splits a text block, so the adapter's per-block replay metadata
-    // no longer aligns with the emitted blocks; drop it rather than fabricate
-    // adapter-private metadata this provider-neutral assembler cannot know.
+    // Recovery or stripping rewrites text blocks, so the adapter's per-block
+    // replay metadata no longer aligns with the emitted blocks; drop it rather
+    // than fabricate adapter-private metadata this provider-neutral assembler
+    // cannot know.
     if (changed || envelope.blocks.length !== all.length) return { blocks, replay: undefined }
     return {
       blocks,
