@@ -264,15 +264,36 @@ describe('BlockAssembler invoke recovery', () => {
       { type: 'tool-call', id: ToolCallId('call-invoke-0-2'), name: 'write', arguments: '{"file_path":"/b"}' },
     ])
   })
+
+  it('recovers a pipe-prefixed DSML invoke (fullwidth and ASCII)', () => {
+    const fw = String.fromCharCode(0xFF5C)
+    const open = (tag: string, pipe: string) => ['<', pipe, 'DSML', pipe, tag, '>'].join('')
+    const close = (name: string, pipe: string) => ['</', pipe, 'DSML', pipe, name, '>'].join('')
+    const invoke = (pipe: string) => [
+      open('invoke name="read"', pipe),
+      open('parameter name="file_path"', pipe), '/a', close('parameter', pipe),
+      close('invoke', pipe),
+    ].join('')
+    const assembler = new BlockAssembler()
+    assembler.push({ type: 'block-end', index: 0, block: { type: 'text', text: `${invoke(fw)} between ${invoke('|')}` } })
+
+    expect(assembler.blocks()).toEqual([
+      { type: 'tool-call', id: ToolCallId('call-invoke-0-1'), name: 'read', arguments: '{"file_path":"/a"}' },
+      { type: 'text', text: ' between ' },
+      { type: 'tool-call', id: ToolCallId('call-invoke-0-2'), name: 'read', arguments: '{"file_path":"/a"}' },
+    ])
+  })
 })
 
-describe('BlockAssembler DSML closing-tag stripping', () => {
-  // Leaked closing tags are assembled from parts so this source never contains
-  // a literal DSML delimiter sequence that a gateway could misparse into an
+describe('BlockAssembler DSML markup stripping', () => {
+  // Leaked markup is assembled from parts so this source never contains a
+  // literal DSML delimiter sequence that a gateway could misparse into an
   // empty tool call.
   const fw = String.fromCharCode(0xFF5C)
   const closeTag = (name: string, pipe = fw) => ['</', pipe, 'DSML', pipe, name, '>'].join('')
   const bareClose = (name: string) => ['</', name, '>'].join('')
+  const openTag = (name: string, pipe = fw) => ['<', pipe, 'DSML', pipe, name, '>'].join('')
+  const bareOpen = (name: string) => ['<', name, '>'].join('')
 
   it('strips fullwidth-pipe closing tags and preserves the answer text', () => {
     const assembler = new BlockAssembler()
@@ -354,6 +375,25 @@ describe('BlockAssembler DSML closing-tag stripping', () => {
       { type: 'tool-call', id: ToolCallId('call-invoke-0-1'), name: 'read', arguments: '{"file_path":"/a"}' },
       { type: 'text', text: ' done' },
     ])
+  })
+
+  it('strips a leaked think closing tag', () => {
+    const assembler = new BlockAssembler()
+    assembler.push({ type: 'block-end', index: 0, block: { type: 'text', text: `answer${bareClose('think')}` } })
+    expect(assembler.blocks()).toEqual([{ type: 'text', text: 'answer' }])
+  })
+
+  it('strips orphan opening tags and function_calls wrappers', () => {
+    const assembler = new BlockAssembler()
+    const text = `${openTag('function_calls')}${bareOpen('parameter name="x"')} value ${closeTag('function_calls')}`
+    assembler.push({ type: 'block-end', index: 0, block: { type: 'text', text } })
+    expect(assembler.blocks()).toEqual([{ type: 'text', text: ' value ' }])
+  })
+
+  it('strips a bare opening invoke tag', () => {
+    const assembler = new BlockAssembler()
+    assembler.push({ type: 'block-end', index: 0, block: { type: 'text', text: `start ${bareOpen('invoke')} end` } })
+    expect(assembler.blocks()).toEqual([{ type: 'text', text: 'start  end' }])
   })
 })
 
