@@ -23,27 +23,38 @@ interface PartialBlock {
   block?: ContentBlock
 }
 
-/** Intermediate split of one text block during `<invoke>` recovery. */
+/** Intermediate split of one text block during invoke-markup recovery. */
 type InvokePart =
   | { kind: 'text'; text: string }
   | { kind: 'tool-call'; name: string; parameters: Record<string, string> }
 
 /**
  * Recover tool calls a provider leaked into a `text` block as DeepSeek-native
- * `<invoke name="…">…</invoke>` markup instead of a structured tool-call block.
- * Some gateways serving DeepSeek models over the Anthropic Messages wire emit
- * this markup as plain text; the adapter maps it to a text block and the loop
- * never dispatches the call, retrying until the token limit. Splitting the
- * block into its surrounding text and recovered tool-call blocks lets the call
- * execute. Each recovered `arguments` is re-stringified from the `<parameter>`
- * values, and text before, between, and after the markup is preserved in order.
+ * invoke markup instead of a structured tool-call block. Covers the bare form
+ * and the pipe-prefixed DSML form (ASCII or fullwidth pipe): gateways serving
+ * DeepSeek models over the Anthropic Messages wire emit either spelling as
+ * plain text, the adapter maps it to a text block, and the loop never
+ * dispatches the call, retrying until the token limit. Splitting the block
+ * into its surrounding text and recovered tool-call blocks lets the call
+ * execute. Each recovered `arguments` is re-stringified from the parameter
+ * values, and text before, between, and after the markup is preserved in
+ * order.
  * @param blocks - the assembled content blocks, in stream order.
  * @returns the blocks with leaked invokes recovered as tool calls, and whether
  *   any block was split.
  */
 function recoverInvokeToolCalls(blocks: ContentBlock[]): { blocks: ContentBlock[]; changed: boolean } {
-  const invokePattern = /<invoke name="([^"]+)">([\s\S]*?)<\/invoke>/g
-  const parameterPattern = /<parameter name="([^"]+)">([\s\S]*?)<\/parameter>/g
+  // Angle brackets and slashes are written as \x3C / \x3E / \x2F so this
+  // source never contains literal markup a gateway could misread.
+  const dsmlPrefix = String.raw`(?:[\uFF5C|]DSML[\uFF5C|])?`
+  const invokePattern = new RegExp(
+    `\\x3C${dsmlPrefix}invoke name="([^"]+)"\\x3E([\\s\\S]*?)\\x3C\\x2F${dsmlPrefix}invoke\\x3E`,
+    'g',
+  )
+  const parameterPattern = new RegExp(
+    `\\x3C${dsmlPrefix}parameter name="([^"]+)"\\x3E([\\s\\S]*?)\\x3C\\x2F${dsmlPrefix}parameter\\x3E`,
+    'g',
+  )
   let changed = false
   let invokeSequence = 0
   const recovered: ContentBlock[] = []
@@ -52,7 +63,7 @@ function recoverInvokeToolCalls(blocks: ContentBlock[]): { blocks: ContentBlock[
       recovered.push(block)
       continue
     }
-    if (!block.text.includes('<invoke')) {
+    if (!block.text.includes('invoke')) {
       recovered.push(block)
       continue
     }
@@ -100,18 +111,20 @@ function recoverInvokeToolCalls(blocks: ContentBlock[]): { blocks: ContentBlock[
 }
 
 /**
- * Strip DeepSeek-native DSML closing tags that a gateway leaked into a `text`
- * block as literal markup. A closing tag carries no tool name or arguments, so
- * it is pure noise and cannot be recovered into a tool call; removing it keeps
- * the visible answer clean. Covers the fullwidth-pipe form (U+FF5C), the
- * ASCII-pipe form, and the pipe-less form, for the `parameter`, `invoke`, and
- * `tool_calls` tag names.
+ * Strip DeepSeek-native DSML markup a gateway leaked into a `text` block as
+ * literal text. Matches opening and closing tags, in the bare form and the
+ * pipe-prefixed DSML form (ASCII or fullwidth pipe), for the tool-call tag
+ * names (`invoke`, `parameter`, `function_calls`, `tool_calls`) and the
+ * reasoning marker (`think`). Stray markup carries no dispatchable tool
+ * identity or arguments, so it is noise to remove; complete invoke pairs are
+ * handled by `recoverInvokeToolCalls` before this pass. Removing the markup
+ * keeps the visible answer clean.
  * @param blocks - the assembled content blocks, in stream order.
- * @returns the blocks with leaked closing tags removed (a text block that held
- *   only tags is dropped), and whether any block changed.
+ * @returns the blocks with leaked markup removed (a text block that held only
+ *   markup is dropped), and whether any block changed.
  */
-function stripDsmlClosingTags(blocks: ContentBlock[]): { blocks: ContentBlock[]; changed: boolean } {
-  const closingTagPattern = /<\/[\uFF5C|]DSML[\uFF5C|](?:parameter|invoke|tool_calls)>|<\/(?:parameter|invoke|tool_calls)>/g
+function stripDsmlMarkup(blocks: ContentBlock[]): { blocks: ContentBlock[]; changed: boolean } {
+  const markupPattern = /\x3C\x2F?(?:[\uFF5C|]DSML[\uFF5C|])?(?:function_calls|tool_calls|invoke|parameter|think)\b[^\x3E]*\x3E/g
   let changed = false
   const stripped: ContentBlock[] = []
   for (const block of blocks) {
@@ -119,7 +132,7 @@ function stripDsmlClosingTags(blocks: ContentBlock[]): { blocks: ContentBlock[];
       stripped.push(block)
       continue
     }
-    const text = block.text.replace(closingTagPattern, '')
+    const text = block.text.replace(markupPattern, '')
     if (text === block.text) {
       stripped.push(block)
       continue
@@ -243,7 +256,7 @@ export class BlockAssembler {
   private assembled(): { blocks: ContentBlock[]; replay: ReplayEnvelope | undefined } {
     const all = this.order.map(index => this.assemble(this.mustGet(index), index))
     const recovered = recoverInvokeToolCalls(all)
-    const stripped = stripDsmlClosingTags(recovered.blocks)
+    const stripped = stripDsmlMarkup(recovered.blocks)
     const base = stripped.blocks
     const changed = recovered.changed || stripped.changed
     const kept = this.finish.kind === 'max-tokens'
