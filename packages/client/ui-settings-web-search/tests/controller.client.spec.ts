@@ -335,6 +335,24 @@ describe('WebSearchCardController sections', () => {
     b.controller.dispose()
   })
 
+  it('edits the Messages model and resets it to the provider default', async () => {
+    const b = bench({ accept: true })
+    serve(b)
+    expect(b.state().model).toEqual({ text: '', overridden: false, invalid: false })
+    b.face.edit('model', 'deepseek-v4.1-flash')
+    b.face.save()
+    await vi.waitFor(() => { expect(b.state().dirty).toBe(false) })
+    expect(b.messages.mutate).toHaveBeenLastCalledWith([{ op: 'set', path: ['model'], value: 'deepseek-v4.1-flash' }], undefined)
+    expect(b.state().model).toMatchObject({ text: 'deepseek-v4.1-flash', overridden: true })
+    b.face.resetField('model')
+    expect(b.state().model).toMatchObject({ text: '', overridden: false })
+    b.face.save()
+    await vi.waitFor(() => { expect(b.state().dirty).toBe(false) })
+    expect(b.messages.mutate).toHaveBeenLastCalledWith([{ op: 'unset', path: ['model'] }], undefined)
+    expect(b.state().model).toMatchObject({ text: '', overridden: false })
+    b.controller.dispose()
+  })
+
   /**
    * Edit the selected section's endpoint, save, reset, and save again.
    * @param b - the mounted controller.
