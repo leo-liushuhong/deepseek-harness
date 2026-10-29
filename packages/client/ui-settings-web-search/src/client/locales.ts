@@ -6,7 +6,7 @@ import type { SettingsFormLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 export type WebSearchSettingsLocaleKey =
   | 'title' | 'description' | 'useSearchApi' | 'useSearchApiHint' | 'searchGuide' | 'searchGuideUrl'
   | 'apiKey' | 'apiKeyHint' | 'apiKeySet' | 'apiKeyUnset'
-  | 'baseUrl' | 'baseUrlHint' | 'searchApiBaseUrl' | 'searchApiBaseUrlHint' | 'maxUses' | 'maxUsesHint' | 'count' | 'countHint'
+  | 'baseUrl' | 'baseUrlHint' | 'searchApiBaseUrl' | 'searchApiBaseUrlHint' | 'model' | 'modelHint' | 'maxUses' | 'maxUsesHint' | 'count' | 'countHint'
   | 'overridden' | 'reset' | 'readOnly' | 'unavailable'
   | 'save' | 'saving' | 'saveFailed' | 'invalidNumber' | 'invalidCount'
 
@@ -26,6 +26,8 @@ export const en: Record<WebSearchSettingsLocaleKey, string> = {
   baseUrlHint: 'Include the API prefix, such as https://api.deepseek.com/anthropic/v1. The provider appends /messages. Leave blank to restore the default.',
   searchApiBaseUrl: 'Search / Fetch API base URL',
   searchApiBaseUrlHint: 'Include the API prefix, such as https://api.deepseek.com/v1/tools. The provider appends /search or /fetch. Leave blank to restore the default.',
+  model: 'Model',
+  modelHint: 'Anthropic-format model name, such as deepseek-v4-flash. Leave blank to restore the default.',
   maxUses: 'Max searches per request',
   maxUsesHint: 'How many searches the auxiliary model may run within one Messages request. Applies only to the Messages API.',
   count: 'Results per search',
@@ -57,6 +59,8 @@ export const zh: Record<WebSearchSettingsLocaleKey, string> = {
   baseUrlHint: '填写含 API 前缀的地址，例如 https://api.deepseek.com/anthropic/v1；程序追加 /messages，留空恢复默认。',
   searchApiBaseUrl: 'Search / Fetch API 基础地址',
   searchApiBaseUrlHint: '填写含 API 前缀的地址，例如 https://api.deepseek.com/v1/tools；程序追加 /search 或 /fetch，留空恢复默认。',
+  model: '模型',
+  modelHint: 'Anthropic 格式的模型名，例如 deepseek-v4-flash；留空恢复默认。',
   maxUses: '单次请求最多搜索次数',
   maxUsesHint: '辅助模型在一次 Messages 请求内最多可执行的搜索次数，仅适用于 Messages API。',
   count: '每次搜索结果数',
@@ -97,6 +101,8 @@ export const ja = {
   'baseUrlHint': 'https://api.deepseek.com/anthropic/v1 など、API プレフィックスを含めてください。プロバイダーは /messages を追加します。デフォルトに戻すには空欄にしてください。',
   'searchApiBaseUrl': 'Search / Fetch API ベース URL',
   'searchApiBaseUrlHint': 'https://api.deepseek.com/v1/tools など、API プレフィックスを含めてください。プロバイダーは /search または /fetch を追加します。デフォルトに戻すには空欄にしてください。',
+  'model': 'モデル',
+  'modelHint': 'Anthropic 形式のモデル名（例: deepseek-v4-flash）。デフォルトに戻すには空欄にしてください。',
   'maxUses': 'リクエストあたりの最大検索回数',
   'maxUsesHint': '1 回の Messages リクエスト内で補助モデルが実行できる検索回数です。Messages API にのみ適用されます。',
   'count': '検索あたりの結果数',
@@ -128,6 +134,8 @@ export const es = {
   baseUrlHint: 'Incluya el prefijo API, como https://api.deepseek.com/anthropic/v1.. El proveedor agrega /messages. Déjelo en blanco para restaurar el valor predeterminado.',
   searchApiBaseUrl: 'Buscar/obtener URL base API',
   searchApiBaseUrlHint: 'Incluya el prefijo API, como https://api.deepseek.com/v1/tools.. El proveedor agrega /search o /fetch. Déjelo en blanco para restaurar el valor predeterminado.',
+  model: 'Modelo',
+  modelHint: 'Nombre del modelo en formato Anthropic, como deepseek-v4-flash. Déjelo en blanco para restaurar el valor predeterminado.',
   maxUses: 'Búsquedas máximas por solicitud',
   maxUsesHint: 'Cuántas búsquedas puede ejecutar el modelo auxiliar dentro de una solicitud de Mensajes. Aplica sólo para Mensajes API.',
   count: 'Resultados por búsqueda',
@@ -159,6 +167,8 @@ export const fr = {
   baseUrlHint: 'Incluez le préfixe API, tel que https://api.deepseek.com/anthropic/v1.. Le fournisseur ajoute /messages. Laissez vide pour restaurer la valeur par défaut.',
   searchApiBaseUrl: "Rechercher/récupérer l'URL de base de API",
   searchApiBaseUrlHint: 'Incluez le préfixe API, tel que https://api.deepseek.com/v1/tools.. Le fournisseur ajoute /search ou /fetch. Laissez vide pour restaurer la valeur par défaut.',
+  model: 'Modèle',
+  modelHint: 'Nom du modèle au format Anthropic, par exemple deepseek-v4-flash. Laissez vide pour restaurer la valeur par défaut.',
   maxUses: 'Nombre maximum de recherches par requête',
   maxUsesHint: "Combien de recherches le modèle auxiliaire peut exécuter dans une requête de messages. S'applique uniquement aux messages API.",
   count: 'Résultats par recherche',
@@ -190,6 +200,8 @@ export const de = {
   baseUrlHint: 'Fügen Sie das Präfix API ein, z. B. https://api.deepseek.com/anthropic/v1.. Der Anbieter hängt /messages an. Lassen Sie das Feld leer, um die Standardeinstellung wiederherzustellen.',
   searchApiBaseUrl: 'Suchen/Abrufen der API-Basis-URL',
   searchApiBaseUrlHint: 'Fügen Sie das Präfix API ein, z. B. https://api.deepseek.com/v1/tools.. Der Anbieter hängt /search oder /fetch an. Lassen Sie das Feld leer, um die Standardeinstellung wiederherzustellen.',
+  model: 'Modell',
+  modelHint: 'Modellname im Anthropic-Format, z. B. deepseek-v4-flash. Lassen Sie das Feld leer, um die Standardeinstellung wiederherzustellen.',
   maxUses: 'Maximale Anzahl an Suchanfragen pro Anfrage',
   maxUsesHint: 'Wie viele Suchvorgänge das Hilfsmodell innerhalb einer Nachrichtenanforderung ausführen darf. Gilt nur für die Nachrichten API.',
   count: 'Ergebnisse pro Suche',
@@ -221,6 +233,8 @@ export const ru = {
   baseUrlHint: 'Включите префикс API, например https://api.deepseek.com/anthropic/v1.. Поставщик добавляет /messages. Оставьте пустым, чтобы восстановить значение по умолчанию.',
   searchApiBaseUrl: 'Найдите/получите базовый URL-адрес API',
   searchApiBaseUrlHint: 'Включите префикс API, например https://api.deepseek.com/v1/tools.. Поставщик добавляет /search или /fetch. Оставьте пустым, чтобы восстановить значение по умолчанию.',
+  model: 'Модель',
+  modelHint: 'Имя модели в формате Anthropic, например deepseek-v4-flash. Оставьте пустым, чтобы восстановить значение по умолчанию.',
   maxUses: 'Максимальное количество запросов на запрос',
   maxUsesHint: 'Сколько поисков вспомогательная модель может выполнить в рамках одного запроса сообщений. Применяется только к сообщениям API.',
   count: 'Результаты по поиску',
@@ -252,6 +266,8 @@ export const pt = {
   baseUrlHint: 'Inclua o prefixo API, como https://api.deepseek.com/anthropic/v1. O provedor anexa /messages. Deixe em branco para restaurar o padrão.',
   searchApiBaseUrl: 'Pesquisar/buscar API URL base',
   searchApiBaseUrlHint: 'Inclua o prefixo API, como https://api.deepseek.com/v1/tools. O provedor anexa /search ou /fetch. Deixe em branco para restaurar o padrão.',
+  model: 'Modelo',
+  modelHint: 'Nome do modelo no formato Anthropic, como deepseek-v4-flash. Deixe em branco para restaurar o padrão.',
   maxUses: 'Máximo de pesquisas por solicitação',
   maxUsesHint: 'Quantas pesquisas o modelo auxiliar pode executar em uma solicitação de Mensagens. Aplica-se somente às Mensagens API.',
   count: 'Resultados por pesquisa',
