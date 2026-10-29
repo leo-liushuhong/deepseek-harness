@@ -59,6 +59,8 @@ export interface WebSearchSettings {
   apiKeyEnv?: string
   /** Messages endpoint; blank inherits the provider default. */
   baseURL?: string
+  /** Anthropic-format model name; blank inherits the provider default. */
+  model?: string
   /** Maximum Messages server-tool uses. */
   maxUses?: number
 }
@@ -93,6 +95,8 @@ export interface WebSearchCardState extends SettingsFormShell {
   useSearchApi: boolean
   /** Endpoint of the selected API. */
   baseURL: SettingsFieldState
+  /** Anthropic-format model name for Messages search. */
+  model: SettingsFieldState
   /** Maximum Messages server-tool uses. */
   maxUses: SettingsFieldState
   /** Search API results per search. */
@@ -150,7 +154,7 @@ export class WebSearchCardController {
       settingsTextField('searchProvider'), settingsTextField('fetchProvider'),
     ], [{ field: API_KEY_FIELD, write: text => this.writeKey(text) }])
     this.messages = new SettingsFormModel(scopes.messages, [
-      settingsTextField('baseURL'), settingsNumberField('maxUses'),
+      settingsTextField('baseURL'), settingsTextField('model'), settingsNumberField('maxUses'),
     ])
     this.api = new SettingsFormModel(scopes.api, [
       settingsTextField('baseURL'),
@@ -209,6 +213,7 @@ export class WebSearchCardController {
       apiSwitchBlocked: shell.invalid || shell.failed,
       useSearchApi: searchApi,
       baseURL: (searchApi ? this.api : this.messages).field('baseURL'),
+      model: this.messages.field('model'),
       maxUses: this.messages.field('maxUses'),
       count: this.api.field('count'),
       apiKey: this.selection.field(API_KEY_FIELD),
@@ -297,6 +302,7 @@ export class WebSearchCardController {
       if (field === API_KEY_FIELD) return this.selection
       if (field === 'maxUses') return this.messages
       if (field === 'count') return this.api
+      if (field === 'model') return this.messages
       return this.searchApi() ? this.api : this.messages
     }
     return {

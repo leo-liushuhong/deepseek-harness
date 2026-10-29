@@ -72,6 +72,20 @@ export function WebSearchCard(props: WebSearchCardProps) {
         onEdit={(text) => { props.edit('baseURL', text) }}
         onReset={() => { props.resetField('baseURL') }}
       />
+      {!searchApi && (
+        <SettingsValueField
+          id="plugin-config-web-search-model"
+          label={t('model')}
+          hint={t('modelHint')}
+          overriddenLabel={t('overridden')}
+          resetLabel={t('reset')}
+          invalidLabel={t('invalidNumber')}
+          disabled={disabled}
+          {...state.model}
+          onEdit={(text) => { props.edit('model', text) }}
+          onReset={() => { props.resetField('model') }}
+        />
+      )}
       <SettingsValueField
         id={searchApi ? 'plugin-config-web-search-count' : 'plugin-config-web-search-max-uses'}
         label={t(limitField)}

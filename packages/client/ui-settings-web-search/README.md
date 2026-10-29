@@ -1,5 +1,5 @@
 ---
-description: "The DeepSeek web-search settings page on the dsh web client's Plugins page: the Search and Fetch API switch, the API key, endpoint, and per-search limit."
+description: "The DeepSeek web-search settings page on the dsh web client's Plugins page: the Search and Fetch API switch, the API key, Messages endpoint and model, and per-search limit."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Open **Plugins** in the sidebar and select **Web search** in the Official group to switch between DeepSeek Messages search and the DeepSeek Search and Fetch APIs, and to set the selected API's key, endpoint, and per-search limit. The page stages what is typed and writes it only on save; the key is written through the credentials domain rather than the settings document, so its literal never rides a response. The page exists while the Host serves the `web-search-deepseek` namespace.
+Open **Plugins** in the sidebar and select **Web search** in the Official group to switch between DeepSeek Messages search and the DeepSeek Search and Fetch APIs, and to set the selected API's key, endpoint and model, and per-search limit. The page stages what is typed and writes it only on save; the key is written through the credentials domain rather than the settings document, so its literal never rides a response. The page exists while the Host serves the `web-search-deepseek` namespace.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ Open **Plugins** in the sidebar and select **Web search** in the Official group 
 <a id="use-this-package"></a>
 ## Use this package
 
-The **Web search** card in the Official group opens the page. **API key** starts blank on every load and reports only whether a key is configured; without one, it says that only conversations using a DeepSeek Account model can search, through the default endpoint, because those searches authenticate with the account sign-in; a blank draft keeps the stored key, and the control is disabled when the credential cannot be written from here, such as a key the process environment supplies. The API base URL and the active limit, **Max searches per request** for Messages or **Results per search** for the Search API, render the effective value, carry an **Overridden** badge with **Reset to default** once overridden, and save as a reset when emptied. Nothing is written until **Save**; leaving the page drops the drafts.
+The **Web search** card in the Official group opens the page. **API key** starts blank on every load and reports only whether a key is configured; without one, it says that only conversations using a DeepSeek Account model can search, through the default endpoint, because those searches authenticate with the account sign-in; a blank draft keeps the stored key, and the control is disabled when the credential cannot be written from here, such as a key the process environment supplies. The API base URL, the Messages model, and the active limit — **Max searches per request** for Messages or **Results per search** for the Search API — render the effective value, carry an **Overridden** badge with **Reset to default** once overridden, and save as a reset when emptied. The Messages model field appears only while the switch is off. Nothing is written until **Save**; leaving the page drops the drafts.
 
 **Use the new Web Search API** defaults off, so search keeps using Messages and fetch keeps using local HTTP. Its hint links to the DeepSeek search and fetch guide for the new API's features and billing. Saving it on selects the DeepSeek Search and Fetch APIs together; saving it off clears both selections back to the deployment's defaults, or stores Messages search with local HTTP fetch when the deployment composes the APIs. The switch appears only while the Host also serves the `web` and `web-deepseek-api` namespaces. With the switch on, the page shows **Results per search** (an integer from 1 through 50, default 10) in place of the Messages-only **Max searches per request**, and invalid result counts block saving. The switch is disabled while an invalid edit or a failed save is staged, so a field it would hide stays visible. Each mode keeps its own API base when switching. The **Messages API base URL** and **Search / Fetch API base URL** labels identify the active protocol; their hints name the required prefix and appended operation path. One save writes the provider settings before the selection, so a refused section leaves the switch unsaved. See [web-search-deepseek](../../web/web-search-deepseek/README.md#use-this-package) and [web-deepseek-api](../../web/web-deepseek-api/README.md#use-this-package) for API behavior.
 
@@ -69,7 +69,7 @@ None; this package neither assembles nor sends a provider request.
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **Three fields of the namespace** — the provider's model, API version, and token budget stay at their composed values; the page edits the key, the endpoint, and the search budget only.
+- **Two fields of the namespace** — the provider's API version and token budget stay at their composed values; the page edits the key, the endpoint, the model, and the search budget only.
 
 <a id="dev-note"></a>
 ### Dev Note
